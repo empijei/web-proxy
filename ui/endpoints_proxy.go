@@ -32,17 +32,18 @@ type (
 
 	// TrafficOverview is a single entry for a proxy traffic response.
 	TrafficOverview struct {
-		ID         ulid.ULID
-		Scheme     string
-		Host       string
-		Method     string
-		Path       string
-		StatusCode int
-		MIME       string
-		StartedAt  time.Time
+		ID           ulid.ULID
+		Scheme       string
+		Host         string
+		Method       string
+		PathAndQuery string
+		StatusCode   int
+		ContentType  string
+		StartedAt    time.Time
 
-		ProxyName string
-		Edited    bool
+		ProxyName      string
+		RequestEdited  bool
+		ResponseEdited bool
 	}
 	// ProxyTrafficResponse is a collection of events that happened since the last
 	// update.
