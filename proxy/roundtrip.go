@@ -1,53 +1,79 @@
 package proxy
 
 import (
-	"context"
 	"net/http"
-	"sync"
 
 	l "github.com/empijei/web-proxy/log"
 	ulid "github.com/oklog/ulid/v2"
 )
 
-// Action represents the possible actions interceptors can take.
-type Action int64
-
-const (
-	// ActionContinue makes the proxy continue executing the request flow, going through
-	// the following interceptors.
-	ActionContinue Action = iota
-	// ActionDrop makes the proxy stop and generate a Bad Gateway response.
-	ActionDrop
-	// ActionSkip makes the proxy skip all the remaining interceptors and just execute
-	// the request/response flight.
-	ActionSkip
-)
-
 type (
-	// RequestInterceptor is a function that can modify and potentially drop a request.
-	RequestInterceptor func(ctx context.Context, rt *RoundTrip, req *http.Request) Action
-	// ResponseInterceptor is a function that can modify and potentially drop a response.
-	ResponseInterceptor func(ctx context.Context, rt *RoundTrip, resp *http.Response) Action
+	// RequestInterceptorMiddleWare is a type use to wrap an inner request interceptor.
+	// This allows decoration logic to perform operations like logging or deciding whether
+	// to run the next interceptor in the chain.
+	RequestInterceptorMiddleWare func(RequestInterceptor) RequestInterceptor
+	// RequestInterceptor is a function that can modify a request.
+	//
+	// If a response is returned, the request is not sent.
+	RequestInterceptor func(rt *RoundTrip, req *http.Request) *http.Response
+
+	// ResponseInterceptorMiddleWare is a type use to wrap an inner response interceptor.
+	// This allows decoration logic to perform operations like logging or deciding whether
+	// to run the next interceptor in the chain.
+	ResponseInterceptorMiddleWare func(ResponseInterceptor) ResponseInterceptor
+	// ResponseInterceptor is a function that can modify a response.
+	//
+	// Response interceptors are called on generated responses, with rt.Skipped
+	// set to true.
+	ResponseInterceptor func(rt *RoundTrip, resp *http.Response)
 )
 
 // RoundTrip is contextual data related to a request-response roundtrip.
 type RoundTrip struct {
+	// Fields set by proxy:
+
+	// ProxyName is the name of the proxy that intercepted this roundtrip.
+	ProxyName string
 	// ID is the identifier for the roundtrip.
-	ID    ulid.ULID
-	store sync.Map
+	ID ulid.ULID
+	// Skipped is set to true by the proxy if the request never hit the server,
+	// but a response was generated instead.
+	Skipped bool
+
+	// Fields set by interceptors:
+
+	// RequestEdited MUST be set when an interceptor modifies a request.
+	RequestEdited bool
+	// ResponseEdited MUST be set when an interceptor modifies a response.
+	ResponseEdited bool
+
+	store map[any]any
 }
 
 // RoundTripKey is a typed key to store and load values from a roundtrip.
-type RoundTripKey[T any] string
+//
+// Ideally K should be an unexported type to make sure there is no collision
+// between packages trying to set the same key.
+//
+// Example:
+//
+//	type myKey struct{}
+//	var MyRoundTripKey = RoundTripKey[myKey, string]{}
+type RoundTripKey[K comparable, V any] struct{}
 
 // Set sets the value for the key.
-func (rtk RoundTripKey[T]) Set(rt *RoundTrip, value T) {
-	rt.store.Store(rtk, value)
+func (rtk RoundTripKey[K, T]) Set(rt *RoundTrip, value T) {
+	if rt.store == nil {
+		rt.store = map[any]any{}
+	}
+	var k K
+	rt.store[k] = value
 }
 
 // Get retrieves the value for the key.
-func (rtk RoundTripKey[T]) Get(rt *RoundTrip) (value T, ok bool) {
-	v, ok := rt.store.Load(rtk)
+func (rtk RoundTripKey[K, T]) Get(rt *RoundTrip) (value T, ok bool) {
+	var k K
+	v, ok := rt.store[k]
 	if !ok {
 		return value, ok
 	}

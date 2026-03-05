@@ -18,15 +18,17 @@ type Proxy struct {
 	gp   *goproxy.ProxyHttpServer
 
 	started  atomic.Bool
-	reqMitm  []RequestInterceptor
-	respMitm []ResponseInterceptor
+	reqMitm  RequestInterceptor
+	respMitm ResponseInterceptor
 }
 
 // New returns a new proxy using ca as Certificate Authority.
 func New(ca *tls.Certificate, name string) (*Proxy, error) {
 	p := &Proxy{
-		name: name,
-		gp:   goproxy.NewProxyHttpServer(),
+		name:     name,
+		gp:       goproxy.NewProxyHttpServer(),
+		reqMitm:  nopReq,
+		respMitm: nopResp,
 	}
 
 	customCaMitm := &goproxy.ConnectAction{Action: goproxy.ConnectMitm, TLSConfig: goproxy.TLSConfigFromCA(ca)}
@@ -43,15 +45,15 @@ func New(ca *tls.Certificate, name string) (*Proxy, error) {
 // Intercept allows to setup additional request or response interception logic.
 //
 // Intercept MUST be called before starting the proxy.
-func (p *Proxy) Intercept(req RequestInterceptor, resp ResponseInterceptor) {
+func (p *Proxy) Intercept(req RequestInterceptorMiddleWare, resp ResponseInterceptorMiddleWare) {
 	if p.started.Load() {
 		panic("cannot call Intercept after the proxy.Handler has been created")
 	}
 	if req != nil {
-		p.reqMitm = append(p.reqMitm, req)
+		p.reqMitm = req(p.reqMitm)
 	}
 	if resp != nil {
-		p.respMitm = append(p.respMitm, resp)
+		p.respMitm = resp(p.respMitm)
 	}
 }
 
@@ -61,23 +63,15 @@ func (p *Proxy) Handler() http.Handler {
 	return p.gp
 }
 
-var skipKey = RoundTripKey[bool]("proxy:skip")
-
 func (p *Proxy) onReq(req *http.Request, gctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-	rt := &RoundTrip{ID: ulid.Make()}
+	rt := &RoundTrip{ProxyName: p.name, ID: ulid.Make()}
 	gctx.UserData = rt
-	ctx := req.Context()
-	for _, f := range p.reqMitm {
-		switch f(ctx, rt, req) {
-		case ActionSkip:
-			skipKey.Set(rt, true)
-			return req, nil
-		case ActionDrop:
-			return nil, goproxy.NewResponse(req, goproxy.ContentTypeText, http.StatusBadGateway, "Request dropped")
-		case ActionContinue:
-		}
+	resp := p.reqMitm(rt, req)
+	if resp != nil {
+		rt.Skipped = true
+		p.onResp(resp, gctx)
+		return nil, resp
 	}
-	req = req.WithContext(ctx)
 	return req, nil
 }
 
@@ -87,21 +81,7 @@ func (p *Proxy) onResp(resp *http.Response, gctx *goproxy.ProxyCtx) *http.Respon
 		l.Errorf("Got response without RoundTrip for '%s %s'", resp.Request.Method, resp.Request.URL.Path)
 		return resp
 	}
-	if skip, ok := skipKey.Get(rt); ok && skip {
-		return resp
-	}
-
-	ctx := resp.Request.Context()
-	for _, f := range p.respMitm {
-		switch f(ctx, rt, resp) {
-		case ActionSkip:
-			return resp
-		case ActionDrop:
-			return goproxy.NewResponse(resp.Request, goproxy.ContentTypeText, http.StatusBadGateway, "Response dropped")
-		case ActionContinue:
-		}
-	}
-	resp.Request = resp.Request.WithContext(ctx)
+	p.respMitm(rt, resp)
 	return resp
 }
 
@@ -116,3 +96,8 @@ func ParseCA(caCert, caKey []byte) (*tls.Certificate, error) {
 	}
 	return &parsedCert, nil
 }
+
+var (
+	nopReq  RequestInterceptor  = func(rt *RoundTrip, req *http.Request) *http.Response { return nil }
+	nopResp ResponseInterceptor = func(rt *RoundTrip, resp *http.Response) {}
+)

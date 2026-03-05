@@ -1,7 +1,6 @@
 package proxy_test
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	_ "embed"
@@ -60,22 +59,28 @@ func TestProxy(t *testing.T) {
 		gotReqID    ulid.ULID
 		gotRespID   ulid.ULID
 		gotVal      int
+		gotProxy    string
 	)
-	rk := proxy.RoundTripKey[int]("proxy_test:base")
-	p.Intercept(func(ctx context.Context, rt *proxy.RoundTrip, req *http.Request) proxy.Action {
-		gotReq = req
+	type pkey struct{}
+	rk := proxy.RoundTripKey[pkey, int]{}
+	p.Intercept(func(ri proxy.RequestInterceptor) proxy.RequestInterceptor {
+		return func(rt *proxy.RoundTrip, req *http.Request) *http.Response {
+			gotProxy = rt.ProxyName
+			gotReq = req
+			gotReqID = rt.ID
+			rk.Set(rt, 42)
+			return ri(rt, req)
+		}
+	}, func(ri proxy.ResponseInterceptor) proxy.ResponseInterceptor {
+		return func(rt *proxy.RoundTrip, resp *http.Response) {
+			buf, _ := io.ReadAll(resp.Body)
+			gotRespBody = string(buf)
+			resp.Body = io.NopCloser(strings.NewReader(gotRespBody))
 
-		gotReqID = rt.ID
-		rk.Set(rt, 42)
-		return proxy.ActionContinue
-	}, func(ctx context.Context, rt *proxy.RoundTrip, resp *http.Response) proxy.Action {
-		buf, _ := io.ReadAll(resp.Body)
-		gotRespBody = string(buf)
-		resp.Body = io.NopCloser(strings.NewReader(gotRespBody))
-
-		gotRespID = rt.ID
-		gotVal, _ = rk.Get(rt)
-		return proxy.ActionContinue
+			gotRespID = rt.ID
+			gotVal, _ = rk.Get(rt)
+			ri(rt, resp) // TOO easy to forget, add a return value?
+		}
 	})
 
 	mitm := httptest.NewServer(p.Handler())
@@ -100,4 +105,5 @@ func TestProxy(t *testing.T) {
 	tst.Is(msg, gotRespBody, t)
 	tst.Is(42, gotVal, t)
 	tst.Is(gotReqID, gotRespID, t)
+	tst.Is("test", gotProxy, t)
 }
