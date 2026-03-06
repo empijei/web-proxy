@@ -50,6 +50,12 @@ type RoundTrip struct {
 	store map[any]any
 }
 
+// NewRoundTrip can be used to construct a RoundTrip for testing or for use outside
+// of the proxy.
+func NewRoundTrip(proxyName string) *RoundTrip {
+	return &RoundTrip{ProxyName: proxyName, ID: ulid.Make()}
+}
+
 // RoundTripKey is a typed key to store and load values from a roundtrip.
 //
 // Ideally K should be an unexported type to make sure there is no collision

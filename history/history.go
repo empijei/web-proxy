@@ -14,24 +14,27 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
+// Entry is an entry in the history.
 type Entry struct {
 	Metadata         ui.TrafficOverview
-	OriginalRequest  []byte
-	OriginalResponse []byte
-	EditedRequest    []byte
-	EditedResponse   []byte
+	OriginalRequest  string
+	EditedRequest    string
+	OriginalResponse string
+	EditedResponse   string
 }
 
 func overViewString(to ui.TrafficOverview) string {
 	return fmt.Sprintf("%s %s://%s", to.Method, to.Scheme, path.Join(to.Host, to.PathAndQuery))
 }
 
+// Recorder allows to record proxy history.
 type Recorder struct {
 	mu    sync.RWMutex
 	state map[ulid.ULID]*Entry
 	now   func() time.Time
 }
 
+// NewRecorder constructs a new recorder.
 func NewRecorder() *Recorder {
 	return &Recorder{
 		state: map[ulid.ULID]*Entry{},
@@ -39,8 +42,31 @@ func NewRecorder() *Recorder {
 	}
 }
 
+// MiddleWare returns the middleware to use on a proxy Intercept.
 func (r *Recorder) MiddleWare() (proxy.RequestInterceptorMiddleWare, proxy.ResponseInterceptorMiddleWare) {
 	return r.onReq, r.onResp
+}
+
+// Get returns the specified entry.
+func (r *Recorder) Get(roundtripID ulid.ULID) (_ Entry, ok bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	e, ok := r.state[roundtripID]
+	if !ok {
+		return Entry{}, false
+	}
+	return *e, ok
+}
+
+// GetAll returns the entire state.
+func (r *Recorder) GetAll() []Entry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var ret []Entry
+	for _, e := range r.state {
+		ret = append(ret, *e)
+	}
+	return ret
 }
 
 func (r *Recorder) onReq(ri proxy.RequestInterceptor) proxy.RequestInterceptor {
@@ -60,16 +86,18 @@ func (r *Recorder) onReq(ri proxy.RequestInterceptor) proxy.RequestInterceptor {
 				ProxyName:    rt.ProxyName,
 			},
 		}
-		buf, err := httputil.DumpRequestOut(req, true)
+		buf, err := httputil.DumpRequest(req, true)
 		if err != nil {
 			buf = nil
 			l.Errorf("Cannot dump request: %q: %v", overViewString(e.Metadata), err)
 		}
-		e.OriginalRequest = buf
+		e.OriginalRequest = string(buf)
 
-		r.mu.Lock()
-		r.state[rt.ID] = e
-		r.mu.Unlock()
+		{
+			r.mu.Lock()
+			r.state[rt.ID] = e
+			r.mu.Unlock()
+		}
 
 		resp := ri(rt, req)
 
@@ -77,43 +105,50 @@ func (r *Recorder) onReq(ri proxy.RequestInterceptor) proxy.RequestInterceptor {
 			return resp
 		}
 
-		e.Metadata.RequestEdited = true
-		buf, err = httputil.DumpRequestOut(req, true)
+		buf, err = httputil.DumpRequest(req, true)
 		if err != nil {
 			buf = nil
 			l.Errorf("Cannot dump modified request: %q: %v", overViewString(e.Metadata), err)
 		}
-		e.EditedRequest = buf
+		{
+			r.mu.Lock()
+			e.Metadata.RequestEdited = true
+			e.EditedRequest = string(buf)
+			r.mu.Unlock()
+		}
 		return resp
 	}
 }
 
 func (r *Recorder) onResp(ri proxy.ResponseInterceptor) proxy.ResponseInterceptor {
 	return func(rt *proxy.RoundTrip, resp *http.Response) {
+		buf, err := httputil.DumpResponse(resp, true)
+
 		r.mu.Lock()
 		e := r.state[rt.ID]
-		r.mu.Unlock()
-
 		e.Metadata.StatusCode = resp.StatusCode
 		e.Metadata.ContentType = resp.Header.Get("Content-Type")
-		buf, err := httputil.DumpResponse(resp, true)
 		if err != nil {
 			buf = nil
 			l.Errorf("Cannot dump response: %q: %v", overViewString(e.Metadata), err)
 		}
-		e.OriginalResponse = buf
+		e.OriginalResponse = string(buf)
+		r.mu.Unlock()
 
 		ri(rt, resp)
 
 		if !rt.ResponseEdited {
 			return
 		}
-		e.Metadata.ResponseEdited = true
 		buf, err = httputil.DumpResponse(resp, true)
 		if err != nil {
 			buf = nil
 			l.Errorf("Cannot dump modified response: %q: %v", overViewString(e.Metadata), err)
 		}
-		e.EditedResponse = buf
+
+		r.mu.Lock()
+		e.Metadata.ResponseEdited = true
+		e.EditedResponse = string(buf)
+		r.mu.Unlock()
 	}
 }

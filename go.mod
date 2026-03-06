@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/elazarl/goproxy v1.8.2
 	github.com/empijei/srpc v0.0.0-20260305135350-f563263007ea
-	github.com/empijei/tst v0.0.0-20260303140155-3196befe4273
+	github.com/empijei/tst v0.0.0-20260306211648-45f59805dc37
 	github.com/oklog/ulid/v2 v2.1.1
 )
 

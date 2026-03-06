@@ -9,7 +9,6 @@ import (
 
 	"github.com/elazarl/goproxy"
 	l "github.com/empijei/web-proxy/log"
-	ulid "github.com/oklog/ulid/v2"
 )
 
 // Proxy is a machine-in-the-middle proxy.
@@ -64,7 +63,7 @@ func (p *Proxy) Handler() http.Handler {
 }
 
 func (p *Proxy) onReq(req *http.Request, gctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-	rt := &RoundTrip{ProxyName: p.name, ID: ulid.Make()}
+	rt := NewRoundTrip(p.name)
 	gctx.UserData = rt
 	resp := p.reqMitm(rt, req)
 	if resp != nil {
@@ -98,6 +97,6 @@ func ParseCA(caCert, caKey []byte) (*tls.Certificate, error) {
 }
 
 var (
-	nopReq  RequestInterceptor  = func(rt *RoundTrip, req *http.Request) *http.Response { return nil }
-	nopResp ResponseInterceptor = func(rt *RoundTrip, resp *http.Response) {}
+	nopReq  RequestInterceptor  = func(_ *RoundTrip, _ *http.Request) *http.Response { return nil }
+	nopResp ResponseInterceptor = func(_ *RoundTrip, _ *http.Response) {}
 )
