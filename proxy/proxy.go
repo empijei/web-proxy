@@ -3,7 +3,6 @@ package proxy
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"net/http"
 	"sync/atomic"
 
@@ -24,10 +23,12 @@ type Proxy struct {
 // New returns a new proxy using ca as Certificate Authority.
 func New(ca *tls.Certificate, name string) (*Proxy, error) {
 	p := &Proxy{
-		name:     name,
-		gp:       goproxy.NewProxyHttpServer(),
-		reqMitm:  nopReq,
-		respMitm: nopResp,
+		name: name,
+		gp:   goproxy.NewProxyHttpServer(),
+
+		// The base intercptors do nothing.
+		reqMitm:  func(_ *RoundTrip, _ *http.Request) *http.Response { return nil },
+		respMitm: func(_ *RoundTrip, _ *http.Response) {},
 	}
 
 	customCaMitm := &goproxy.ConnectAction{Action: goproxy.ConnectMitm, TLSConfig: goproxy.TLSConfigFromCA(ca)}
@@ -83,20 +84,3 @@ func (p *Proxy) onResp(resp *http.Response, gctx *goproxy.ProxyCtx) *http.Respon
 	p.respMitm(rt, resp)
 	return resp
 }
-
-// ParseCA parses the given cert and key.
-func ParseCA(caCert, caKey []byte) (*tls.Certificate, error) {
-	parsedCert, err := tls.X509KeyPair(caCert, caKey)
-	if err != nil {
-		return nil, err
-	}
-	if parsedCert.Leaf, err = x509.ParseCertificate(parsedCert.Certificate[0]); err != nil {
-		return nil, err
-	}
-	return &parsedCert, nil
-}
-
-var (
-	nopReq  RequestInterceptor  = func(_ *RoundTrip, _ *http.Request) *http.Response { return nil }
-	nopResp ResponseInterceptor = func(_ *RoundTrip, _ *http.Response) {}
-)

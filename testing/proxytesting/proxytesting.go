@@ -1,3 +1,4 @@
+// Package proxytesting provides helpers to simplify writing tests for this project.
 package proxytesting
 
 import (
@@ -7,25 +8,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-
-	_ "embed"
+	"testing"
 
 	"github.com/empijei/tst"
 	"github.com/empijei/web-proxy/proxy"
 )
 
-var (
-	//go:embed testdata/cert.pem
-	caCert []byte
-	//go:embed testdata/key.pem
-	caKey []byte
-)
-
 // SetupCert sets up a simple certificate authority.
-func SetupCert(t tst.Test) (ca *tls.Certificate, caCertPool *x509.CertPool) {
+func SetupCert(t *testing.T) (ca *tls.Certificate, caCertPool *x509.CertPool) {
 	t.Helper()
+	caCert, caKey := tst.Do2(proxy.GenerateCA())(t)
 	rootCert := tst.Do(proxy.ParseCA(caCert, caKey))(t)
-
 	caCertPool = x509.NewCertPool()
 	leaf := tst.Do(x509.ParseCertificate(rootCert.Certificate[0]))(t)
 	caCertPool.AddCert(leaf)

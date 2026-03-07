@@ -6,6 +6,7 @@ import (
 	"net/http/httputil"
 	"path"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	l "github.com/empijei/web-proxy/log"
@@ -29,16 +30,22 @@ func overViewString(to ui.TrafficOverview) string {
 
 // Recorder allows to record proxy history.
 type Recorder struct {
+	now   func() time.Time
+	close chan struct{}
+
 	mu    sync.RWMutex
 	state map[ulid.ULID]*Entry
-	now   func() time.Time
+
+	generateEvts atomic.Bool
+	evt          chan Entry
 }
 
 // NewRecorder constructs a new recorder.
 func NewRecorder() *Recorder {
 	return &Recorder{
-		state: map[ulid.ULID]*Entry{},
 		now:   time.Now,
+		close: make(chan struct{}),
+		state: map[ulid.ULID]*Entry{},
 	}
 }
 
@@ -67,6 +74,23 @@ func (r *Recorder) GetAll() []Entry {
 		ret = append(ret, *e)
 	}
 	return ret
+}
+
+// Events return the events channel. Only one consumer should be reading events
+// from the returned channel, multi-casting should be done by the caller.
+//
+// If consumers are too slow at processing events, the recorder will block.
+func (r *Recorder) Events() <-chan Entry {
+	if !r.generateEvts.CompareAndSwap(false, true) {
+		panic("(*history.Recoder).Events() called multiple times")
+	}
+	r.evt = make(chan Entry)
+	return r.evt
+}
+
+// Stop stops the recorder.
+func (r *Recorder) Stop() {
+	close(r.close)
 }
 
 func (r *Recorder) onReq(ri proxy.RequestInterceptor) proxy.RequestInterceptor {
@@ -134,6 +158,15 @@ func (r *Recorder) onResp(ri proxy.ResponseInterceptor) proxy.ResponseIntercepto
 		}
 		e.OriginalResponse = string(buf)
 		r.mu.Unlock()
+
+		if r.generateEvts.Load() {
+			defer func() {
+				select {
+				case r.evt <- *e:
+				case <-r.close:
+				}
+			}()
+		}
 
 		ri(rt, resp)
 

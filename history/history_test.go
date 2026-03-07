@@ -23,35 +23,25 @@ type stubInnerInterceptor struct {
 	modifyResp bool
 }
 
-// TODO make a helper for this.
 func (s *stubInnerInterceptor) mw() (proxy.RequestInterceptorMiddleWare, proxy.ResponseInterceptorMiddleWare) {
 	return func(ri proxy.RequestInterceptor) proxy.RequestInterceptor {
 			return func(rt *proxy.RoundTrip, req *http.Request) *http.Response {
-				s.req(rt, req)
+				s.id = rt.ID
+				if s.modifyReq {
+					rt.RequestEdited = true
+				}
+				req.Header.Set("X-Request-Modified", "true")
 				return ri(rt, req)
 			}
 		}, func(ri proxy.ResponseInterceptor) proxy.ResponseInterceptor {
 			return func(rt *proxy.RoundTrip, resp *http.Response) {
-				s.resp(rt, resp)
+				if s.modifyResp {
+					rt.ResponseEdited = true
+				}
+				resp.Header.Set("X-Response-Modified", "true")
 				ri(rt, resp)
 			}
 		}
-}
-
-func (s *stubInnerInterceptor) req(rt *proxy.RoundTrip, req *http.Request) *http.Response {
-	s.id = rt.ID
-	if s.modifyReq {
-		rt.RequestEdited = true
-	}
-	req.Header.Set("X-Request-Modified", "true")
-	return nil
-}
-
-func (s *stubInnerInterceptor) resp(rt *proxy.RoundTrip, resp *http.Response) {
-	if s.modifyResp {
-		rt.ResponseEdited = true
-	}
-	resp.Header.Set("X-Response-Modified", "true")
 }
 
 func TestMiddleWare(t *testing.T) {
@@ -61,6 +51,21 @@ func TestMiddleWare(t *testing.T) {
 	r.SetClock(func() time.Time {
 		return now
 	})
+
+	var evt history.Entry
+	{
+		evts := r.Events()
+		defer r.Stop()
+		go func() {
+			for {
+				select {
+				case evt = <-evts:
+				case <-t.Context().Done():
+				}
+			}
+		}()
+	}
+
 	ca, caPool := proxytesting.SetupCert(t)
 	p := tst.Do(proxy.New(ca, "test:history"))(t)
 	sii := &stubInnerInterceptor{modifyReq: true, modifyResp: true}
@@ -100,4 +105,5 @@ func TestMiddleWare(t *testing.T) {
 	tst.Is(true, strings.Contains(e.EditedResponse, "X-Response-Modified"), t)
 
 	tst.Is("true", hresp.Header.Get("X-Response-Modified"), t)
+	tst.Is(evt, e, t)
 }
