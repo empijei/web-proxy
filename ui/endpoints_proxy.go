@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/empijei/srpc"
-	"github.com/oklog/ulid/v2"
 )
 
 const (
@@ -32,7 +31,7 @@ type (
 
 	// TrafficOverview is a single entry for a proxy traffic response.
 	TrafficOverview struct {
-		ID           ulid.ULID
+		ID           uint64
 		Scheme       string
 		Host         string
 		Method       string

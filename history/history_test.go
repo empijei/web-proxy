@@ -5,7 +5,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,11 +16,10 @@ import (
 	"github.com/empijei/web-proxy/proxy"
 	"github.com/empijei/web-proxy/testing/proxytesting"
 	"github.com/empijei/web-proxy/ui"
-	"github.com/oklog/ulid/v2"
 )
 
 type stubInnerInterceptor struct {
-	id         ulid.ULID
+	id         proxy.RoundTripID
 	modifyReq  bool
 	modifyResp bool
 }
@@ -44,7 +45,7 @@ func (s *stubInnerInterceptor) mw() (proxy.RequestInterceptorMiddleWare, proxy.R
 		}
 }
 
-func TestMiddleWare(t *testing.T) {
+func TestMiddleWareSingleFlight(t *testing.T) {
 	tst.Go(t)
 	now := time.Now()
 	r := history.NewRecorder()
@@ -86,7 +87,7 @@ func TestMiddleWare(t *testing.T) {
 	e := got[0]
 	t.Logf("entry:\n%s", tst.Do(json.MarshalIndent(e, "", "\t"))(t))
 	tst.Is(ui.TrafficOverview{
-		ID:             sii.id,
+		ID:             uint64(sii.id),
 		Scheme:         "https",
 		Host:           ru.Host,
 		Method:         "POST",
@@ -105,5 +106,58 @@ func TestMiddleWare(t *testing.T) {
 	tst.Is(true, strings.Contains(e.EditedResponse(), "X-Response-Modified"), t)
 
 	tst.Is("true", hresp.Header.Get("X-Response-Modified"), t)
-	tst.Is(evt, e, t)
+	tst.Is(evt.Metadata, e.Metadata, t)
+	tst.Is(evt.Metadata,
+		tst.DoB(r.Get(proxy.RoundTripID(evt.Metadata.ID)))(t).Metadata, t)
+}
+
+func TestMiddleWare(t *testing.T) {
+	tst.Go(t)
+	r := history.NewRecorder()
+	var evt []history.Entry
+	{
+		evts := r.Events()
+		defer r.Stop()
+		go func() {
+			for {
+				select {
+				case e := <-evts:
+					evt = append(evt, e)
+				case <-t.Context().Done():
+				}
+			}
+		}()
+	}
+
+	const size = 100
+
+	ca, caPool := proxytesting.SetupCert(t)
+	p := tst.Do(proxy.New(ca, "test:history"))(t)
+	sii := &stubInnerInterceptor{}
+	p.Intercept(sii.mw())
+	p.Intercept(r.MiddleWare())
+	remote, cl := proxytesting.SetupProxyAndClient(t, caPool, p, nil)
+
+	var wg sync.WaitGroup
+	for i := range size {
+		wg.Go(func() {
+			str := strconv.Itoa(i)
+			_ = tst.Do(cl.Post(remote+"/"+str, "text/plain", strings.NewReader(str)))(t)
+		})
+	}
+	wg.Wait()
+
+	got := r.GetAll()
+	tst.Is(size, len(got), t)
+	prev := got[0]
+	for i, e := range got[1:] {
+		if e.Metadata.ID > prev.Metadata.ID {
+			prev = e
+			continue
+		}
+		t.Errorf("Detected bad ordering: index %d entry has ID %d which is less than index %d with %d", i+1, e.Metadata.ID, i, prev.Metadata.ID)
+	}
+
+	gotUntil := r.GetUntil(size / 2)
+	tst.Is(size/2, len(gotUntil), t)
 }

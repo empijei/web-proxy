@@ -15,6 +15,7 @@ type Proxy struct {
 	name string
 	gp   *goproxy.ProxyHttpServer
 
+	ids      atomic.Uint64
 	started  atomic.Bool
 	reqMitm  RequestInterceptor
 	respMitm ResponseInterceptor
@@ -64,7 +65,7 @@ func (p *Proxy) Handler() http.Handler {
 }
 
 func (p *Proxy) onReq(req *http.Request, gctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-	rt := NewRoundTrip(p.name)
+	rt := p.NewRoundTrip()
 	gctx.UserData = rt
 	resp := p.reqMitm(rt, req)
 	if resp != nil {

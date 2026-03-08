@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	l "github.com/empijei/web-proxy/log"
-	ulid "github.com/oklog/ulid/v2"
 )
 
 type (
@@ -28,6 +27,8 @@ type (
 	ResponseInterceptor func(rt *RoundTrip, resp *http.Response)
 )
 
+type RoundTripID uint64
+
 // RoundTrip is contextual data related to a request-response roundtrip.
 type RoundTrip struct {
 	// Fields set by proxy:
@@ -35,7 +36,7 @@ type RoundTrip struct {
 	// ProxyName is the name of the proxy that intercepted this roundtrip.
 	ProxyName string
 	// ID is the identifier for the roundtrip.
-	ID ulid.ULID
+	ID RoundTripID
 	// Skipped is set to true by the proxy if the request never hit the server,
 	// but a response was generated instead.
 	Skipped bool
@@ -52,8 +53,11 @@ type RoundTrip struct {
 
 // NewRoundTrip can be used to construct a RoundTrip for testing or for use outside
 // of the proxy.
-func NewRoundTrip(proxyName string) *RoundTrip {
-	return &RoundTrip{ProxyName: proxyName, ID: ulid.Make()}
+func (p *Proxy) NewRoundTrip() *RoundTrip {
+	return &RoundTrip{
+		ProxyName: p.name,
+		ID:        RoundTripID(p.ids.Add(1)),
+	}
 }
 
 // RoundTripKey is a typed key to store and load values from a roundtrip.
