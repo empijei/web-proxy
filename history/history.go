@@ -18,11 +18,16 @@ import (
 // Entry is an entry in the history.
 type Entry struct {
 	Metadata         ui.TrafficOverview
-	OriginalRequest  string
-	EditedRequest    string
-	OriginalResponse string
-	EditedResponse   string
+	originalRequest  string
+	editedRequest    string
+	originalResponse string
+	editedResponse   string
 }
+
+func (e *Entry) OriginalRequest() string  { return e.originalRequest }
+func (e *Entry) EditedRequest() string    { return e.editedRequest }
+func (e *Entry) OriginalResponse() string { return e.originalResponse }
+func (e *Entry) EditedResponse() string   { return e.editedResponse }
 
 func overViewString(to ui.TrafficOverview) string {
 	return fmt.Sprintf("%s %s://%s", to.Method, to.Scheme, path.Join(to.Host, to.PathAndQuery))
@@ -115,7 +120,7 @@ func (r *Recorder) onReq(ri proxy.RequestInterceptor) proxy.RequestInterceptor {
 			buf = nil
 			l.Errorf("Cannot dump request: %q: %v", overViewString(e.Metadata), err)
 		}
-		e.OriginalRequest = string(buf)
+		e.originalRequest = string(buf)
 
 		{
 			r.mu.Lock()
@@ -137,7 +142,7 @@ func (r *Recorder) onReq(ri proxy.RequestInterceptor) proxy.RequestInterceptor {
 		{
 			r.mu.Lock()
 			e.Metadata.RequestEdited = true
-			e.EditedRequest = string(buf)
+			e.editedRequest = string(buf)
 			r.mu.Unlock()
 		}
 		return resp
@@ -156,7 +161,7 @@ func (r *Recorder) onResp(ri proxy.ResponseInterceptor) proxy.ResponseIntercepto
 			buf = nil
 			l.Errorf("Cannot dump response: %q: %v", overViewString(e.Metadata), err)
 		}
-		e.OriginalResponse = string(buf)
+		e.originalResponse = string(buf)
 		r.mu.Unlock()
 
 		if r.generateEvts.Load() {
@@ -181,7 +186,7 @@ func (r *Recorder) onResp(ri proxy.ResponseInterceptor) proxy.ResponseIntercepto
 
 		r.mu.Lock()
 		e.Metadata.ResponseEdited = true
-		e.EditedResponse = string(buf)
+		e.editedResponse = string(buf)
 		r.mu.Unlock()
 	}
 }

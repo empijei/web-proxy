@@ -99,10 +99,10 @@ func TestMiddleWare(t *testing.T) {
 		ResponseEdited: true,
 	}, e.Metadata, t)
 
-	tst.Is(false, strings.Contains(e.OriginalRequest, "X-Request-Modified"), t)
-	tst.Is(true, strings.Contains(e.EditedRequest, "X-Request-Modified"), t)
-	tst.Is(false, strings.Contains(e.OriginalResponse, "X-Response-Modified"), t)
-	tst.Is(true, strings.Contains(e.EditedResponse, "X-Response-Modified"), t)
+	tst.Is(false, strings.Contains(e.OriginalRequest(), "X-Request-Modified"), t)
+	tst.Is(true, strings.Contains(e.EditedRequest(), "X-Request-Modified"), t)
+	tst.Is(false, strings.Contains(e.OriginalResponse(), "X-Response-Modified"), t)
+	tst.Is(true, strings.Contains(e.EditedResponse(), "X-Response-Modified"), t)
 
 	tst.Is("true", hresp.Header.Get("X-Response-Modified"), t)
 	tst.Is(evt, e, t)
