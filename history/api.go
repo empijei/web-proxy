@@ -2,7 +2,6 @@ package history
 
 import (
 	"context"
-	"fmt"
 	"iter"
 
 	"github.com/empijei/chans"
@@ -26,8 +25,10 @@ func (r *Recorder) RegisterAPI(ctx context.Context, mux srpc.Mux) {
 	multi := chans.NewMulticast(ctx.Done(), buf)
 
 	ui.HistoryMetadataEP.Register(mux, func(ctx context.Context, _ ui.HistoryMetadataRequest) (iter.Seq2[ui.HistoryMetadataResponse, error], error) {
+		r.mu.Lock()
 		sub := multi.Subscribe(ctx.Done(), 1)
-		prev := chans.FromSlice(ctx.Done(), r.GetAll())
+		prev := r.unsafeGetUntilLast(ctx)
+		r.mu.Unlock()
 		all := chans.Concat(ctx.Done(), prev, sub)
 		return func(yield func(ui.HistoryMetadataResponse, error) bool) {
 			for {
@@ -38,7 +39,6 @@ func (r *Recorder) RegisterAPI(ctx context.Context, mux srpc.Mux) {
 					if !ok {
 						return
 					}
-					fmt.Printf("#%d %s\n", v.Metadata.ID, v.Metadata.PathAndQuery)
 					if !yield(v.Metadata, nil) {
 						return
 					}

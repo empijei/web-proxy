@@ -11,11 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/empijei/chans"
 	"github.com/empijei/tst"
 	"github.com/empijei/web-proxy/history"
 	"github.com/empijei/web-proxy/proxy"
 	"github.com/empijei/web-proxy/testing/proxytesting"
 	"github.com/empijei/web-proxy/ui"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 type stubInnerInterceptor struct {
@@ -112,7 +114,7 @@ func TestMiddleWareSingleFlight(t *testing.T) {
 }
 
 func TestMiddleWare(t *testing.T) {
-	tst.Go(t)
+	ctx := tst.Go(t)
 	r := history.NewRecorder()
 	var evt []history.Entry
 	{
@@ -158,6 +160,6 @@ func TestMiddleWare(t *testing.T) {
 		t.Errorf("Detected bad ordering: index %d entry has ID %d which is less than index %d with %d", i+1, e.Metadata.ID, i, prev.Metadata.ID)
 	}
 
-	gotUntil := r.GetUntil(size / 2)
-	tst.Is(size/2, len(gotUntil), t)
+	gotUntil := chans.ToSlice(ctx.Done(), r.GetUntil(ctx, size/2+1))
+	tst.Is(got[:size/2], gotUntil, t, cmpopts.IgnoreUnexported(history.Entry{}))
 }

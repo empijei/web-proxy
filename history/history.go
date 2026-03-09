@@ -2,6 +2,7 @@
 package history
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -80,6 +81,11 @@ func (r *Recorder) Get(id ui.RoundTripID) (_ Entry, ok bool) {
 func (r *Recorder) GetAll() []Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.unsafeGetAll()
+}
+
+// unsafeGetAll must be called while holding r.mu.
+func (r *Recorder) unsafeGetAll() []Entry {
 	ret := make([]Entry, 0, len(r.state))
 	for _, e := range r.state {
 		if e == nil {
@@ -90,20 +96,31 @@ func (r *Recorder) GetAll() []Entry {
 	return ret
 }
 
-// GetUntil returns the entire state, sorted, up until the given roundtrip.
-func (r *Recorder) GetUntil(until ui.RoundTripID) []Entry {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	ret := make([]Entry, 0, until)
-	for _, e := range r.state {
-		if e == nil {
-			continue
+// unsafeGetAll must be called while holding r.mu.
+func (r *Recorder) unsafeGetUntilLast(ctx context.Context) <-chan Entry {
+	last := ui.RoundTripID(len(r.state))
+	return r.GetUntil(ctx, last)
+}
+
+// GetUntil returns the entire state, up until the given roundtrip, excluded.
+func (r *Recorder) GetUntil(ctx context.Context, until ui.RoundTripID) <-chan Entry {
+	ret := make(chan Entry)
+	go func() {
+		defer close(ret)
+		for i := range until {
+			r.mu.RLock()
+			e := r.state[i]
+			r.mu.RUnlock()
+			if e == nil {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ret <- *e:
+			}
 		}
-		if e.Metadata.ID > until {
-			break
-		}
-		ret = append(ret, *e)
-	}
+	}()
 	return ret
 }
 
