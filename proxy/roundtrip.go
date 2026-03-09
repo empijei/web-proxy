@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	l "github.com/empijei/web-proxy/log"
+	"github.com/empijei/web-proxy/ui"
 )
 
 type (
@@ -27,8 +28,6 @@ type (
 	ResponseInterceptor func(rt *RoundTrip, resp *http.Response)
 )
 
-type RoundTripID uint64
-
 // RoundTrip is contextual data related to a request-response roundtrip.
 type RoundTrip struct {
 	// Fields set by proxy:
@@ -36,7 +35,7 @@ type RoundTrip struct {
 	// ProxyName is the name of the proxy that intercepted this roundtrip.
 	ProxyName string
 	// ID is the identifier for the roundtrip.
-	ID RoundTripID
+	ID ui.RoundTripID
 	// Skipped is set to true by the proxy if the request never hit the server,
 	// but a response was generated instead.
 	Skipped bool
@@ -56,7 +55,7 @@ type RoundTrip struct {
 func (p *Proxy) NewRoundTrip() *RoundTrip {
 	return &RoundTrip{
 		ProxyName: p.name,
-		ID:        RoundTripID(p.ids.Add(1)),
+		ID:        ui.RoundTripID(p.ids.Add(1)),
 	}
 }
 

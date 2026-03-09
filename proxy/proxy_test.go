@@ -10,6 +10,7 @@ import (
 	"github.com/empijei/tst"
 	"github.com/empijei/web-proxy/proxy"
 	"github.com/empijei/web-proxy/testing/proxytesting"
+	"github.com/empijei/web-proxy/ui"
 )
 
 func TestProxy(t *testing.T) {
@@ -19,8 +20,8 @@ func TestProxy(t *testing.T) {
 	var (
 		gotReq      *http.Request
 		gotRespBody string
-		gotReqID    proxy.RoundTripID
-		gotRespID   proxy.RoundTripID
+		gotReqID    ui.RoundTripID
+		gotRespID   ui.RoundTripID
 		gotVal      int
 		gotProxy    string
 	)

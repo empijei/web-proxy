@@ -1,9 +1,14 @@
 // Package api implements the UI API.
 package api
 
-import "github.com/empijei/srpc"
+import (
+	"context"
+
+	"github.com/empijei/srpc"
+	"github.com/empijei/web-proxy/history"
+)
 
 // Setup registers the API on the given mux.
-func Setup(mux srpc.Mux) {
-	// WIP
+func Setup(ctx context.Context, mux srpc.Mux, r *history.Recorder) {
+	r.RegisterAPI(ctx, mux)
 }

@@ -1,3 +1,4 @@
+// Package history provides utilities to record and serve proxy traffic.
 package history
 
 import (
@@ -16,7 +17,7 @@ import (
 
 // Entry is an entry in the history.
 type Entry struct {
-	Metadata         ui.TrafficOverview
+	Metadata         ui.HistoryMetadataResponse
 	originalRequest  string
 	editedRequest    string
 	originalResponse string
@@ -35,7 +36,7 @@ func (e *Entry) OriginalResponse() string { return e.originalResponse }
 // EditedResponse returns the string representation of the modified response, if any.
 func (e *Entry) EditedResponse() string { return e.editedResponse }
 
-func overViewString(to ui.TrafficOverview) string {
+func overViewString(to ui.HistoryMetadataResponse) string {
 	return fmt.Sprintf("%s %s://%s", to.Method, to.Scheme, path.Join(to.Host, to.PathAndQuery))
 }
 
@@ -66,10 +67,10 @@ func (r *Recorder) MiddleWare() (proxy.RequestInterceptorMiddleWare, proxy.Respo
 }
 
 // Get returns the specified entry.
-func (r *Recorder) Get(id proxy.RoundTripID) (_ Entry, ok bool) {
+func (r *Recorder) Get(id ui.RoundTripID) (_ Entry, ok bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if id > proxy.RoundTripID(len(r.state)) {
+	if id > ui.RoundTripID(len(r.state)) {
 		return Entry{}, false
 	}
 	return *r.state[id], true
@@ -90,7 +91,7 @@ func (r *Recorder) GetAll() []Entry {
 }
 
 // GetUntil returns the entire state, sorted, up until the given roundtrip.
-func (r *Recorder) GetUntil(until proxy.RoundTripID) []Entry {
+func (r *Recorder) GetUntil(until ui.RoundTripID) []Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	ret := make([]Entry, 0, until)
@@ -98,7 +99,7 @@ func (r *Recorder) GetUntil(until proxy.RoundTripID) []Entry {
 		if e == nil {
 			continue
 		}
-		if proxy.RoundTripID(e.Metadata.ID) > until {
+		if e.Metadata.ID > until {
 			break
 		}
 		ret = append(ret, *e)
@@ -130,8 +131,8 @@ func (r *Recorder) onReq(ri proxy.RequestInterceptor) proxy.RequestInterceptor {
 			qs = "?"
 		}
 		e := &Entry{
-			Metadata: ui.TrafficOverview{
-				ID:           uint64(rt.ID),
+			Metadata: ui.HistoryMetadataResponse{
+				ID:           rt.ID,
 				Scheme:       req.URL.Scheme,
 				Host:         req.Host,
 				Method:       req.Method,

@@ -19,7 +19,7 @@ import (
 )
 
 type stubInnerInterceptor struct {
-	id         proxy.RoundTripID
+	id         ui.RoundTripID
 	modifyReq  bool
 	modifyResp bool
 }
@@ -86,8 +86,8 @@ func TestMiddleWareSingleFlight(t *testing.T) {
 	tst.Be(len(got) == 1, t)
 	e := got[0]
 	t.Logf("entry:\n%s", tst.Do(json.MarshalIndent(e, "", "\t"))(t))
-	tst.Is(ui.TrafficOverview{
-		ID:             uint64(sii.id),
+	tst.Is(ui.HistoryMetadataResponse{
+		ID:             sii.id,
 		Scheme:         "https",
 		Host:           ru.Host,
 		Method:         "POST",
@@ -108,7 +108,7 @@ func TestMiddleWareSingleFlight(t *testing.T) {
 	tst.Is("true", hresp.Header.Get("X-Response-Modified"), t)
 	tst.Is(evt.Metadata, e.Metadata, t)
 	tst.Is(evt.Metadata,
-		tst.DoB(r.Get(proxy.RoundTripID(evt.Metadata.ID)))(t).Metadata, t)
+		tst.DoB(r.Get(evt.Metadata.ID))(t).Metadata, t)
 }
 
 func TestMiddleWare(t *testing.T) {

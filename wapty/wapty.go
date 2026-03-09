@@ -44,7 +44,7 @@ func Run(ctx context.Context, certDir string) error {
 			case <-ctx.Done():
 				return
 			case e := <-evts:
-				fmt.Printf("%s: %s %s://%s%s -> %v %v", e.Metadata.ID,
+				fmt.Printf("%d: %s %s://%s%s -> %v %v", e.Metadata.ID,
 					e.Metadata.Method, e.Metadata.Scheme, e.Metadata.Host, e.Metadata.PathAndQuery, e.Metadata.StatusCode, e.Metadata.ContentType)
 			}
 		}
