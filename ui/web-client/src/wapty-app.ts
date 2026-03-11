@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { property, customElement } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 
 import './wtk-table.js';
 import './wtk-tabs.js';
@@ -15,12 +15,37 @@ export class WaptyApp extends LitElement {
       { ID: 2, name: 'Other', count: 7, status: 'Waiting' },
     ];
 
-    const testTableHeaders = ['ID', 'Name', 'Count', 'Status'];
+    const testTableHeaders = [
+      { Key: 'ID', Label: '#' },
+      { Key: 'name', Label: 'Name' },
+      { Key: 'count', Label: 'Amt' },
+      { Key: 'status', Label: 'Status' },
+    ];
 
-    return html`<wtk-table
-      .headers="${testTableHeaders}"
-      .rows="${testTableData}"
-    ></wtk-table>`;
+    const testTabsData = [
+      {
+        label: 'Table',
+        content: () =>
+          html`<wtk-table
+            .headers="${testTableHeaders}"
+            .rows="${testTableData}"
+          ></wtk-table>`,
+      },
+      { label: 'Styling', content: () => html`<b>This is bold</b>` },
+      {
+        label: 'Divider',
+        content: () => html`
+          <div style="width: 100%; height: 100%;">
+            <wtk-divider>
+              <div slot="primary">Primary Content</div>
+              <div slot="secondary">Secondary Content</div>
+            </wtk-divider>
+          </div>
+        `,
+      },
+    ];
+
+    return html` <wtk-tabs .tabs="${testTabsData}"></wtk-tabs> `;
   }
 }
 

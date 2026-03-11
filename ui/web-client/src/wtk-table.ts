@@ -2,16 +2,21 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-export interface Entry {
+export interface RowData {
   ID: number;
   // Index signature allows dynamic access using header strings
   [key: string]: any;
 }
 
+export interface Header {
+  Key: string;
+  Label: string;
+}
+
 @customElement('wtk-table')
 export class WTKTable extends LitElement {
-  @property({ type: Array }) rows: Entry[] = [];
-  @property({ type: Array }) headers: string[] = [];
+  @property({ type: Array }) rows: RowData[] = [];
+  @property({ type: Array }) headers: Header[] = [];
 
   // Track the widths of each column in pixels
   @state() private columnWidths: number[] = [];
@@ -110,7 +115,7 @@ export class WTKTable extends LitElement {
             ${this.headers.map(
               (header, index) => html`
                 <th>
-                  ${header}
+                  ${header.Label}
                   <div
                     class="resizer ${this.resizingColIndex === index
                       ? 'active'
@@ -123,12 +128,15 @@ export class WTKTable extends LitElement {
           </tr>
         </thead>
         <tbody>
+          <!--TODO use virtual scrolling-->
           ${repeat(
             this.rows,
-            row => row.ID, // Uses the guaranteed ID for highly efficient DOM updates
+            row => row.ID,
             row => html`
               <tr>
-                ${this.headers.map(header => html` <td>${row[header]}</td> `)}
+                ${this.headers.map(
+                  header => html` <td>${row[header.Key]}</td> `,
+                )}
               </tr>
             `,
           )}

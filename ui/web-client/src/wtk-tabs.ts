@@ -1,9 +1,11 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
+export type Renderer = () => TemplateResult;
+
 export interface TabData {
-  content: string;
   label: string;
+  content: Renderer;
 }
 
 @customElement('wtk-tabs')
@@ -87,7 +89,7 @@ export class WTKTabs extends LitElement {
       </div>
 
       <div class="tab-content" role="tabpanel">
-        ${this.tabs[this.activeIndex]?.content}
+        ${this.tabs[this.activeIndex]?.content()}
       </div>
     `;
   }

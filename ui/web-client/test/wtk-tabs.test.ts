@@ -8,9 +8,9 @@ describe('WTKTabs', () => {
   let element: WTKTabs;
 
   const testTabsData = [
-    { label: 'Profile', content: 'User profile details go here.' },
-    { label: 'Settings', content: 'Manage your app preferences.' },
-    { label: 'Notifications', content: 'View your recent alerts.' },
+    { label: 'Profile', content: () => html`User profile details go here.` },
+    { label: 'Settings', content: () => html`<b>This is bold</b>` },
+    { label: 'Notifications', content: () => html`View your recent alerts.` },
   ];
 
   beforeEach(async () => {
@@ -43,7 +43,9 @@ describe('WTKTabs', () => {
   });
 
   it('switches content when a tab is clicked', async () => {
-    const buttons = element.shadowRoot!.querySelectorAll('.tab-button') as NodeListOf<HTMLButtonElement>;
+    const buttons = element.shadowRoot!.querySelectorAll(
+      '.tab-button',
+    ) as NodeListOf<HTMLButtonElement>;
     const content = element.shadowRoot!.querySelector('.tab-content');
 
     // Click the second tab

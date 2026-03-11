@@ -4,7 +4,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmitOnError": true,
-    "lib": ["es2021", "dom", "DOM.Iterable"],
+    "lib": [
+      "es2021",
+      "dom",
+      "DOM.Iterable"
+    ],
     "strict": true,
     "esModuleInterop": false,
     "allowSyntheticDefaultImports": true,
@@ -17,5 +21,7 @@
     "incremental": true,
     "skipLibCheck": true
   },
-  "include": ["**/*.ts"]
+  "include": [
+    "**/*.ts"
+  ]
 }
